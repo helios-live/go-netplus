@@ -1,4 +1,4 @@
-package netplus
+package netplus // import go.ideatocode.tech/netplus
 
 import (
 	"net"
