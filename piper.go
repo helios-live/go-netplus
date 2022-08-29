@@ -13,6 +13,7 @@ import (
 type Piper struct {
 	Logger  log.Logger
 	Timeout time.Duration
+	debug   bool
 }
 
 // NewPiper returns a pointer to a newPiper Piper instance
@@ -21,6 +22,11 @@ func NewPiper(l log.Logger, t time.Duration) *Piper {
 		Logger:  l,
 		Timeout: t,
 	}
+}
+
+// Debug turns debugging on and off
+func (p Piper) Debug(debug bool) {
+	p.debug = debug
 }
 
 // Run pipes data between upstream and downstream and closes one when the other closes
@@ -42,7 +48,9 @@ func (p Piper) Run(ctx context.Context, downstream io.ReadWriteCloser, upstream 
 		ctx.Done()
 		downstream.Close()
 		upstream.Close()
-		p.Logger.Debug("Closing sockets")
+		if p.debug {
+			p.Logger.Debug("Closing sockets")
+		}
 	}
 	p.idleTimeoutPipe(ctx, downstream, upstream, dur, cancel)
 }
