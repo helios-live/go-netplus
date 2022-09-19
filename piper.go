@@ -87,6 +87,9 @@ func (p Piper) idleTimeoutPipe(ctx context.Context, dst io.ReadWriter, src io.Re
 					err = ew
 					break
 				}
+				if p.debug && nw != nr {
+					p.Logger.Error("Broken Write")
+				}
 			}
 			if er != nil {
 				if er != io.EOF {
@@ -108,6 +111,9 @@ func (p Piper) idleTimeoutPipe(ctx context.Context, dst io.ReadWriter, src io.Re
 			if ew != nil {
 				err = ew
 				break
+			}
+			if p.debug && nw != nr {
+				p.Logger.Error("Broken Write")
 			}
 		}
 		if er != nil {
