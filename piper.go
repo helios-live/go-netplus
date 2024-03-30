@@ -64,7 +64,8 @@ func (p *Piper) idleTimeoutPipe(ctx context.Context, dst io.ReadWriteCloser, src
 
 	ctx, closeContext := context.WithCancel(ctx)
 
-	timekeeper := make(chan struct{})
+	upstreamReset := make(chan struct{})
+	downstreammReset := make(chan struct{})
 	closeBothSockets := func(from string) {
 		if p.debugLevel > 9999 {
 			p.Logger.Debug("closeBothSockets called from ", from)
@@ -82,7 +83,6 @@ func (p *Piper) idleTimeoutPipe(ctx context.Context, dst io.ReadWriteCloser, src
 		if p.debugLevel > 9999 {
 			p.Logger.Debug("closing")
 		}
-		close(timekeeper)
 		ctx.Done()
 	}
 	go func() {
@@ -97,7 +97,8 @@ func (p *Piper) idleTimeoutPipe(ctx context.Context, dst io.ReadWriteCloser, src
 				}
 				closeBothSockets("idle")
 				return
-			case <-timekeeper:
+			case <-upstreamReset:
+			case <-downstreammReset:
 			}
 		}
 	}()
@@ -105,11 +106,11 @@ func (p *Piper) idleTimeoutPipe(ctx context.Context, dst io.ReadWriteCloser, src
 	var err1, err2 error
 	var ec = make(chan error, 2)
 	go func() {
-		w1, err1 = copy(ctx, src, dst, timekeeper)
+		w1, err1 = copy(ctx, src, dst, upstreamReset)
 		ec <- err1
 	}()
 	go func() {
-		w2, err2 = copy(ctx, dst, src, timekeeper)
+		w2, err2 = copy(ctx, dst, src, downstreammReset)
 		ec <- err2
 	}()
 	firstErr := <-ec
@@ -130,7 +131,7 @@ func (p *Piper) idleTimeoutPipe(ctx context.Context, dst io.ReadWriteCloser, src
 }
 
 func copy(ctx context.Context, src io.Reader, dst io.Writer, timekeeper chan struct{}) (written int64, err error) {
-
+	defer close(timekeeper)
 	size := 32 * 1024
 	if l, ok := src.(*io.LimitedReader); ok && int64(size) > l.N {
 		if l.N < 1 {
