@@ -160,7 +160,11 @@ func copy(ctx context.Context, src io.Reader, dst io.Writer, timekeeper chan str
 				err = ErrShortWrite
 				break
 			}
-			timekeeper <- struct{}{}
+			// non blocking send
+			select {
+			case timekeeper <- struct{}{}:
+			default:
+			}
 		}
 		if er != nil {
 			if er != io.EOF {
