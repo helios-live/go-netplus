@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io"
 	"sync/atomic"
-
 	"time"
 
 	"go.ideatocode.tech/log"
@@ -56,7 +55,6 @@ func (p *Piper) Run(ctx context.Context, downstream io.ReadWriteCloser, upstream
 }
 
 func (p *Piper) idleTimeoutPipe(ctx context.Context, dst io.ReadWriteCloser, src io.ReadWriteCloser, timeout time.Duration) (written int64, err error) {
-
 	if p.debugLevel > 9999 {
 		p.Logger.Debug("runnning idleTimeoutPipe for ", timeout)
 	}
@@ -86,25 +84,30 @@ func (p *Piper) idleTimeoutPipe(ctx context.Context, dst io.ReadWriteCloser, src
 		ctx.Done()
 	}
 	go func() {
+		timer := time.NewTimer(timeout)
+		defer timer.Stop() // Stop the timer when the goroutine exits
+
 		for {
 			select {
 			case <-ctx.Done():
 				closeBothSockets("ctx.Done")
 				return
-			case <-time.After(timeout):
+			case <-timer.C:
 				if p.debugLevel > 0 {
 					p.Logger.Debug("idletimeoutpipe: timeout reached")
 				}
 				closeBothSockets("idle")
 				return
 			case <-upstreamReset:
+				timer.Reset(timeout)
 			case <-downstreammReset:
+				timer.Reset(timeout)
 			}
 		}
 	}()
 	var w1, w2 int64
 	var err1, err2 error
-	var ec = make(chan error, 2)
+	ec := make(chan error, 2)
 	go func() {
 		w1, err1 = copy(ctx, src, dst, upstreamReset)
 		ec <- err1
