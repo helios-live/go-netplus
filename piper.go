@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -22,6 +23,16 @@ type Piper struct {
 	Logger     log.Logger
 	Timeout    time.Duration
 	debugLevel int
+}
+
+var pool sync.Pool
+
+func init() {
+	pool = sync.Pool{
+		New: func() interface{} {
+			return make([]byte, 32*1024)
+		},
+	}
 }
 
 // NewPiper returns a pointer to a newPiper Piper instance
@@ -109,11 +120,11 @@ func (p *Piper) idleTimeoutPipe(ctx context.Context, dst io.ReadWriteCloser, src
 	var err1, err2 error
 	ec := make(chan error, 2)
 	go func() {
-		w1, err1 = copy(ctx, src, dst, upstreamReset)
+		w1, err1 = copy(src, dst, upstreamReset)
 		ec <- err1
 	}()
 	go func() {
-		w2, err2 = copy(ctx, dst, src, downstreammReset)
+		w2, err2 = copy(dst, src, downstreammReset)
 		ec <- err2
 	}()
 	firstErr := <-ec
@@ -133,17 +144,13 @@ func (p *Piper) idleTimeoutPipe(ctx context.Context, dst io.ReadWriteCloser, src
 	return w1 + w2, firstErr
 }
 
-func copy(ctx context.Context, src io.Reader, dst io.Writer, timekeeper chan struct{}) (written int64, err error) {
+func copy(src io.Reader, dst io.Writer, timekeeper chan struct{}) (written int64, err error) {
 	defer close(timekeeper)
-	size := 32 * 1024
-	if l, ok := src.(*io.LimitedReader); ok && int64(size) > l.N {
-		if l.N < 1 {
-			size = 1
-		} else {
-			size = int(l.N)
-		}
-	}
-	buf := make([]byte, size)
+
+	// buf := make([]byte, size)
+	buf := pool.Get().([]byte)
+	defer pool.Put(buf)
+
 	for {
 		nr, er := src.Read(buf)
 		if nr > 0 {

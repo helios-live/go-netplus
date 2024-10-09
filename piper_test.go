@@ -50,21 +50,24 @@ func (c *nopreader) Read(p []byte) (n int, err error) {
 	return 0, nil
 }
 
-var running = true
-var m = sync.Mutex{}
+var (
+	running = true
+	m       = sync.Mutex{}
+)
 
 func isRunning() bool {
 	m.Lock()
 	defer m.Unlock()
 	return running
 }
+
 func stopRunning() {
 	m.Lock()
 	defer m.Unlock()
 	running = false
 }
-func TestWriteTimeoutReached(t *testing.T) {
 
+func TestWriteTimeoutReached(t *testing.T) {
 	logger := log.NewZero(os.Stderr)
 	ln, err := net.Listen("tcp", ":0")
 	if err != nil {
@@ -73,7 +76,7 @@ func TestWriteTimeoutReached(t *testing.T) {
 	nn := 0
 	go func() {
 		for isRunning() {
-			c, err := ln.Accept()
+			c, _ := ln.Accept()
 
 			b := make([]byte, 100)
 			err = nil
@@ -119,6 +122,34 @@ func TestWriteTimeoutReached(t *testing.T) {
 
 	for isRunning() {
 		time.Sleep(time.Millisecond)
+	}
+}
+
+func BenchmarkBufferAllocation(b *testing.B) {
+	sizes := []int{32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536}
+	for _, size := range sizes {
+		b.Run(fmt.Sprintf("Size%d", size), func(b *testing.B) {
+			b.Run("Make", func(b *testing.B) {
+				for i := 0; i < b.N; i++ {
+					buf := make([]byte, size)
+					_ = buf
+				}
+			})
+
+			pool := sync.Pool{
+				New: func() interface{} {
+					return make([]byte, size)
+				},
+			}
+
+			b.Run("SyncPool", func(b *testing.B) {
+				for i := 0; i < b.N; i++ {
+					buf := pool.Get().([]byte)
+					_ = buf
+					pool.Put(buf)
+				}
+			})
+		})
 	}
 }
 
@@ -174,5 +205,4 @@ func TestReadTimeoutReached(t *testing.T) {
 	for isRunning() {
 		time.Sleep(time.Millisecond)
 	}
-
 }

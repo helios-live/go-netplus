@@ -68,7 +68,6 @@ func TestCappingWrites(t *testing.T) {
 	go func() {
 		for running {
 			c, err := ln.Accept()
-
 			if err != nil {
 				panic(err)
 			}
