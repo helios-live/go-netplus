@@ -3,8 +3,12 @@ package netplus // import go.ideatocode.tech/netplus
 import (
 	"io"
 	"net"
+	"sync"
 	"sync/atomic"
+	"time"
 )
+
+const MaxMinutes = 10
 
 // CounterConn counts all bytes that go through it
 type CounterConn struct {
@@ -17,12 +21,34 @@ type CounterConn struct {
 // CounterListener is the Listener that uses CounterConn instead of net.Conn
 type CounterListener struct {
 	net.Listener
+	rpm        [MaxMinutes]int64
+	LastMinute int64
+	mux        sync.Mutex
 }
 
 // Accept wraps the inner net.Listener accept and returns a CounterConn
-func (cl CounterListener) Accept() (net.Conn, error) {
+func (cl *CounterListener) Accept() (net.Conn, error) {
 	conn, err := cl.Listener.Accept()
+	minuteEpoch := time.Now().Unix() / 60
+	cl.mux.Lock()
+	if minuteEpoch != cl.LastMinute {
+		for i := MaxMinutes - 1; i > 0; i-- {
+			cl.rpm[i] = cl.rpm[i-1]
+		}
+		cl.rpm[0] = 1
+		cl.LastMinute = minuteEpoch
+	} else {
+		cl.rpm[0]++
+	}
+	cl.mux.Unlock()
+
 	return &CounterConn{conn, 0, 0, 0}, err
+}
+
+func (cl *CounterListener) GetRPM() [MaxMinutes]int64 {
+	cl.mux.Lock()
+	defer cl.mux.Unlock()
+	return cl.rpm
 }
 
 func (cc *CounterConn) Read(b []byte) (int, error) {
