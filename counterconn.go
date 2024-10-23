@@ -21,16 +21,16 @@ type CounterConn struct {
 // CounterListener is the Listener that uses CounterConn instead of net.Conn
 type CounterListener struct {
 	net.Listener
-	rpm        [MaxMinutes]int64
-	LastMinute int64
+	rpm        *[MaxMinutes]int64
+	LastMinute *int64
 	mux        *sync.Mutex
 }
 
 func NewCounterListener(l net.Listener) *CounterListener {
 	return &CounterListener{
 		Listener:   l,
-		rpm:        [MaxMinutes]int64{},
-		LastMinute: 0,
+		rpm:        &[MaxMinutes]int64{},
+		LastMinute: new(int64),
 		mux:        &sync.Mutex{},
 	}
 }
@@ -40,12 +40,14 @@ func (cl CounterListener) Accept() (net.Conn, error) {
 	conn, err := cl.Listener.Accept()
 	minuteEpoch := time.Now().Unix() / 60
 	cl.mux.Lock()
-	if minuteEpoch != cl.LastMinute {
+
+	if minuteEpoch != *cl.LastMinute {
+
 		for i := MaxMinutes - 1; i > 0; i-- {
 			cl.rpm[i] = cl.rpm[i-1]
 		}
 		cl.rpm[0] = 1
-		cl.LastMinute = minuteEpoch
+		*cl.LastMinute = minuteEpoch
 	} else {
 		cl.rpm[0]++
 	}
@@ -57,7 +59,7 @@ func (cl CounterListener) Accept() (net.Conn, error) {
 func (cl *CounterListener) GetRPM() [MaxMinutes]int64 {
 	cl.mux.Lock()
 	defer cl.mux.Unlock()
-	return cl.rpm
+	return *cl.rpm
 }
 
 func (cc *CounterConn) Read(b []byte) (int, error) {

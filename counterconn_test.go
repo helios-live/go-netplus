@@ -3,7 +3,6 @@ package netplus
 import (
 	"net"
 	"reflect"
-	"sync"
 	"testing"
 	"time"
 )
@@ -60,16 +59,12 @@ func TestCounterListener_Accept(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cl := &CounterListener{
-				Listener:   tt.fields.Listener,
-				rpm:        tt.fields.rpm,
-				LastMinute: tt.fields.lastMinute,
-				mux:        sync.Mutex{},
-			}
+			cl := NewCounterListener(&MockListener{})
 			for i := 0; i < tt.rounds; i++ {
 				// Simulate a minute passing
 				if i%60+1 == 1 && i != 0 {
-					cl.LastMinute = time.Now().Unix()
+					now := time.Now().Unix()
+					cl.LastMinute = &now
 				}
 				got, err := cl.Accept()
 				if (err != nil) != tt.wantErr {
