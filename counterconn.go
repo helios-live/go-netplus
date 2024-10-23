@@ -23,11 +23,20 @@ type CounterListener struct {
 	net.Listener
 	rpm        [MaxMinutes]int64
 	LastMinute int64
-	mux        sync.Mutex
+	mux        *sync.Mutex
+}
+
+func NewCounterListener(l net.Listener) *CounterListener {
+	return &CounterListener{
+		Listener:   l,
+		rpm:        [MaxMinutes]int64{},
+		LastMinute: 0,
+		mux:        &sync.Mutex{},
+	}
 }
 
 // Accept wraps the inner net.Listener accept and returns a CounterConn
-func (cl *CounterListener) Accept() (net.Conn, error) {
+func (cl CounterListener) Accept() (net.Conn, error) {
 	conn, err := cl.Listener.Accept()
 	minuteEpoch := time.Now().Unix() / 60
 	cl.mux.Lock()
